@@ -104,7 +104,7 @@ print("Baseline: %.2f%% (%.2f%%)" % (results.mean() * 100, results.std() * 100))
 pipe.fit(X_train, y_train)
 
 y_prob = pipe.predict_proba(X_test)
-y_pred = y_prob[:, 1] > 0.5
+y_pred = [1 if i > 0.5 else 0 for i in y_prob[:, 1]]
 
 print(f"roc: {roc_auc_score(y_test, y_pred)}")
 print(f"accuracy_score: {accuracy_score(y_test, y_pred)}")
@@ -118,7 +118,7 @@ print("Generating predictions...")
 pipe.fit(train[features], train["claim"])
 
 claim_prob = pipe.predict_proba(test[features])
-claim = claim_prob[:, 1] > 0.5
+claim = [1 if i > 0.5 else 0 for i in claim_prob[:, 1]]
 submission = pd.DataFrame({"id": test["id"], "claim": claim})
 submission.to_csv("./output/submission.csv", index=False)
 
