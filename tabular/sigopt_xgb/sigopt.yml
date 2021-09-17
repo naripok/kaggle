@@ -1,0 +1,53 @@
+experiment:
+  name: XGBoost Optimization
+  metrics:
+    - name: accuracy
+      strategy: optimize
+      objective: maximize
+  parameters:
+    - name: n_estimators
+      bounds:
+        min: 10
+        max: 100
+      type: int
+    - name: reg_lambda
+      bounds:
+        min: 0
+        max: 10
+      type: int
+    - name: max_depth
+      bounds:
+        min: 1
+        max: 15
+      type: int
+    - name: learning_rate
+      bounds:
+        min: 0.001
+        max: 0.1
+      type: double
+    - name: gamma
+      bounds:
+        min: 0
+        max: 15
+      type: double
+    - name: colsample_bytree
+      bounds:
+        min: 0.5
+        max: 1
+      type: double
+    - name: subsample
+      bounds:
+        min: 0.4
+        max: 1
+      type: double
+    - name: reg_alpha
+      bounds:
+        min: 0
+        max: 100
+      type: int
+    - name: min_child_weight
+      bounds:
+        min: 0
+        max: 100
+      type: int
+  observation_budget: 10
