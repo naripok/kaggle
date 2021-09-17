@@ -1,14 +1,14 @@
 experiment:
   name: XGBoost Optimization
   metrics:
-    - name: accuracy
+    - name: roc
       strategy: optimize
       objective: maximize
   parameters:
     - name: n_estimators
       bounds:
         min: 10
-        max: 100
+        max: 10000
       type: int
     - name: reg_lambda
       bounds:
@@ -50,4 +50,4 @@ experiment:
         min: 0
         max: 100
       type: int
-  observation_budget: 10
+  observation_budget: 20
