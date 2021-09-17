@@ -8,7 +8,7 @@ experiment:
     - name: n_estimators
       bounds:
         min: 10
-        max: 10000
+        max: 4000
       type: int
     - name: reg_lambda
       bounds:
