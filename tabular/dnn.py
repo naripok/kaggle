@@ -66,7 +66,7 @@ def baseline_model():
 print(baseline_model().summary())
 
 estimator = KerasClassifier(
-    build_fn=baseline_model, epochs=3, batch_size=128, verbose=1
+    build_fn=baseline_model, epochs=3, batch_size=64, verbose=1
 )
 
 pipe = Pipeline(

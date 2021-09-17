@@ -1,0 +1,47 @@
+experiment:
+  name: DNN Optimization
+  metrics:
+    - name: roc
+      strategy: optimize
+      objective: maximize
+  parameters:
+    - name: n_layers
+      bounds:
+        min: 2
+        max: 6
+      type: int
+    - name: n_hidden
+      bounds:
+        min: 4
+        max: 128
+      type: int
+    - name: dropout
+      bounds:
+        min: 0
+        max: 1
+      type: double
+    - name: activation
+      categorical_values:
+        - enum_index: 1
+          name: "relu"
+          object: "categorical_value"
+        - enum_index: 2
+          name: "swish"
+          object: "categorical_value"
+      type: categorical
+    - name: learning_rate
+      bounds:
+        min: 0.001
+        max: 0.1
+      type: double
+    - name: epochs
+      bounds:
+        min: 10
+        max: 40
+      type: int
+    - name: n_quantiles
+      bounds:
+        min: 16
+        max: 512
+      type: int
+  observation_budget: 40
