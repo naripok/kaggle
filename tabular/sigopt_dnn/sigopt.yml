@@ -7,7 +7,7 @@ experiment:
   parameters:
     - name: n_layers
       bounds:
-        min: 2
+        min: 3
         max: 6
       type: int
     - name: n_hidden
@@ -29,19 +29,18 @@ experiment:
           name: "swish"
           object: "categorical_value"
       type: categorical
-    - name: learning_rate
-      bounds:
-        min: 0.001
-        max: 0.1
-      type: double
-    - name: epochs
-      bounds:
-        min: 10
-        max: 40
-      type: int
     - name: n_quantiles
       bounds:
         min: 16
-        max: 512
+        max: 2048
       type: int
-  observation_budget: 40
+    - name: quantile_output_distribution
+      categorical_values:
+        - enum_index: 1
+          name: "uniform"
+          object: "categorical_value"
+        - enum_index: 2
+          name: "normal"
+          object: "categorical_value"
+      type: categorical
+  observation_budget: 10

@@ -21,6 +21,7 @@ from tensorflow.keras.layers import Dense, Input, Dropout
 from tensorflow.keras.metrics import AUC
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TerminateOnNaN
 import sigopt
 
 sigopt.log_model("DNN")
@@ -49,13 +50,14 @@ print("training model...")
 input_shape = t.cast(np.ndarray, X_train).shape[1]
 
 # model params
-n_layers = sigopt.get_parameter("n_layers", default=8)
-n_hidden = sigopt.get_parameter("n_hidden", default=1)
-dropout = sigopt.get_parameter("dropout", default=0.5)
+n_layers = sigopt.get_parameter("n_layers", default=3)
+n_hidden = sigopt.get_parameter("n_hidden", default=8)
+dropout = sigopt.get_parameter("dropout", default=0.2)
 activation = sigopt.get_parameter("activation", default="relu")
-learning_rate = sigopt.get_parameter("learning_rate", default=0.001)
-epochs = sigopt.get_parameter("epochs", default=10)
-n_quantiles = sigopt.get_parameter("n_quantiles", default=128)
+n_quantiles = sigopt.get_parameter("n_quantiles", default=512)
+quantiles_output_distribution = sigopt.get_parameter(
+    "quantiles_output_distribution", default="uniform"
+)
 
 
 def baseline_model():
@@ -69,7 +71,7 @@ def baseline_model():
     auc = AUC(name="aucroc")
 
     model.compile(
-        optimizer=Adam(learning_rate=learning_rate),
+        optimizer=Adam(learning_rate=0.1),
         loss="categorical_crossentropy",
         metrics=["accuracy", auc],
     )
@@ -80,7 +82,15 @@ def baseline_model():
 print(baseline_model().summary())
 
 estimator = KerasClassifier(
-    build_fn=baseline_model, epochs=epochs, batch_size=512, verbose=0
+    build_fn=baseline_model,
+    epochs=100,
+    batch_size=512,
+    callbacks=[
+        ReduceLROnPlateau(monitor="aucroc", factor=0.2, patience=3, min_lr=0.0001),
+        EarlyStopping(monitor="loss", patience=5, min_delta=0.005),
+        TerminateOnNaN(),
+    ],
+    verbose=0,
 )
 
 
@@ -92,7 +102,10 @@ pipe = Pipeline(
         ),
         (
             "scaler",
-            QuantileTransformer(n_quantiles=n_quantiles, output_distribution="uniform"),
+            QuantileTransformer(
+                n_quantiles=n_quantiles,
+                output_distribution=quantiles_output_distribution,
+            ),
         ),
         ("model", estimator),
     ]
