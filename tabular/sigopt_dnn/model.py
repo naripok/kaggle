@@ -17,7 +17,7 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Input, Dropout
+from tensorflow.keras.layers import Dense, Input, Dropout, BatchNormalization
 from tensorflow.keras.metrics import AUC
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from tensorflow.keras.optimizers import Adam
@@ -50,8 +50,8 @@ print("training model...")
 input_shape = t.cast(np.ndarray, X_train).shape[1]
 
 # model params
-n_layers = sigopt.get_parameter("n_layers", default=3)
-n_hidden = sigopt.get_parameter("n_hidden", default=8)
+n_layers = sigopt.get_parameter("n_layers", default=4)
+n_hidden = sigopt.get_parameter("n_hidden", default=32)
 dropout = sigopt.get_parameter("dropout", default=0.2)
 activation = sigopt.get_parameter("activation", default="relu")
 n_quantiles = sigopt.get_parameter("n_quantiles", default=512)
@@ -64,16 +64,15 @@ def baseline_model():
     model = Sequential()
     model.add(Input(input_shape))
     for _ in range(n_layers):
+        model.add(BatchNormalization())
         model.add(Dense(n_hidden, activation=activation))
         model.add(Dropout(dropout))
     model.add(Dense(2, activation="softmax"))
 
-    auc = AUC(name="aucroc")
-
     model.compile(
         optimizer=Adam(learning_rate=0.1),
         loss="categorical_crossentropy",
-        metrics=["accuracy", auc],
+        metrics=["accuracy", AUC(name="aucroc")],
     )
 
     return model
@@ -84,13 +83,13 @@ print(baseline_model().summary())
 estimator = KerasClassifier(
     build_fn=baseline_model,
     epochs=100,
-    batch_size=512,
+    batch_size=256,
     callbacks=[
         ReduceLROnPlateau(monitor="aucroc", factor=0.2, patience=3, min_lr=0.0001),
-        EarlyStopping(monitor="loss", patience=5, min_delta=0.005),
+        EarlyStopping(monitor="aucroc", patience=10, min_delta=0.005),
         TerminateOnNaN(),
     ],
-    verbose=0,
+    verbose=1,
 )
 
 
