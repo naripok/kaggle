@@ -50,7 +50,7 @@ print("training model...")
 input_shape = t.cast(np.ndarray, X_train).shape[1]
 
 # model params
-n_layers = sigopt.get_parameter("n_layers", default=4)
+n_layers = sigopt.get_parameter("n_layers", default=2)
 n_hidden = sigopt.get_parameter("n_hidden", default=32)
 dropout = sigopt.get_parameter("dropout", default=0.2)
 activation = sigopt.get_parameter("activation", default="relu")
