@@ -1,0 +1,46 @@
+experiment:
+  name: DRNN Optimization
+  metrics:
+    - name: roc
+      strategy: optimize
+      objective: maximize
+  parameters:
+    - name: n_layers
+      bounds:
+        min: 4
+        max: 8
+      type: int
+    - name: n_hidden
+      bounds:
+        min: 4
+        max: 256
+      type: int
+    - name: dropout
+      bounds:
+        min: 0
+        max: 0.6
+      type: double
+    - name: activation
+      categorical_values:
+        - enum_index: 1
+          name: "relu"
+          object: "categorical_value"
+        - enum_index: 2
+          name: "swish"
+          object: "categorical_value"
+      type: categorical
+    - name: n_quantiles
+      bounds:
+        min: 16
+        max: 2048
+      type: int
+    - name: quantile_output_distribution
+      categorical_values:
+        - enum_index: 1
+          name: "uniform"
+          object: "categorical_value"
+        - enum_index: 2
+          name: "normal"
+          object: "categorical_value"
+      type: categorical
+  observation_budget: 20
