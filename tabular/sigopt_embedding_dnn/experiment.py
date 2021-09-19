@@ -30,16 +30,70 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
+TRAIN_INPUT_PATH = "../input/train.csv.zip"
+TEST_INPUT_PATH = "../input/test.csv.zip"
+OUTPUT_PATH = "./output/submission.csv"
 
 # fix random seed for reproducibility
 SEED = 7
 np.random.seed(SEED)  # type: ignore
 
+N_JOBS = 5
+N_SPLITS = 10
+OBSERVATION_BUDGET = 10
+
+PARAMETERS = [
+    {"name": "n_layers", "type": "int", "bounds": {"min": 4, "max": 8}},
+    {
+        "name": "n_hidden",
+        "type": "int",
+        "bounds": {"min": 8, "max": 128},
+    },
+    {"name": "dropout", "type": "double", "bounds": {"min": 0, "max": 0.6}},
+    {
+        "name": "n_quantiles",
+        "type": "int",
+        "bounds": {"min": 32, "max": 2048},
+    },
+    {
+        "name": "activation",
+        "type": "categorical",
+        "categorical_values": [
+            {
+                "enum_index": 1,
+                "name": "relu",
+                "object": "categorical_value",
+            },
+            {
+                "enum_index": 2,
+                "name": "swish",
+                "object": "categorical_value",
+            },
+        ],
+    },
+    {
+        "name": "quantile_output_distribution",
+        "type": "categorical",
+        "categorical_values": [
+            {
+                "enum_index": 1,
+                "name": "uniform",
+                "object": "categorical_value",
+            },
+            {
+                "enum_index": 2,
+                "name": "normal",
+                "object": "categorical_value",
+            },
+        ],
+    },
+]
+
 
 def prepare_data():
     logging.info("loading dataset")
-    train = t.cast(pd.DataFrame, pd.read_csv("../input/train.csv.zip"))
-    test = t.cast(pd.DataFrame, pd.read_csv("../input/test.csv.zip"))
+    train = t.cast(pd.DataFrame, pd.read_csv(TRAIN_INPUT_PATH))
+    test = t.cast(pd.DataFrame, pd.read_csv(TEST_INPUT_PATH))
 
     logging.info("feature augmentation")
     train["n_missing"] = train.isna().sum(axis=1)
@@ -50,7 +104,7 @@ def prepare_data():
 
     logging.info("split, split, split...")
     X_train, X_test, y_train, y_test = train_test_split(
-        train[features], train["claim"], test_size=0.33, random_state=42
+        train[features], train["claim"], test_size=0.33, random_state=SEED
     )
 
     return (X_train, y_train, X_test, y_test), (test["id"], test[features])
@@ -95,7 +149,7 @@ def create_pipeline(input_shape, assignments):
 
         return model
 
-    logging.info(baseline_model().summary())
+    baseline_model().summary()
 
     estimator = KerasClassifier(
         build_fn=baseline_model,
@@ -109,7 +163,7 @@ def create_pipeline(input_shape, assignments):
                 min_lr=0.00001,
                 min_delta=0.0005,
             ),
-            EarlyStopping(monitor="aucroc", patience=3, min_delta=0.0002),
+            EarlyStopping(monitor="aucroc", patience=4, min_delta=0.0002),
             TerminateOnNaN(),
         ],
         verbose=1,
@@ -142,7 +196,7 @@ def evaluate_model(X_train, y_train, assignments):
 
     pipe = create_pipeline(input_shape, assignments)
 
-    skfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
+    skfold = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=SEED)
 
     results = cross_val_score(
         pipe,
@@ -151,7 +205,7 @@ def evaluate_model(X_train, y_train, assignments):
         cv=skfold,
         scoring="roc_auc",
         verbose=1,
-        n_jobs=2,
+        n_jobs=N_JOBS,
     )
 
     logging.info(
@@ -201,7 +255,7 @@ def make_predictions(X_train, y_train, pred_index, X_pred, assignments):
     claim_prob = pipe.predict_proba(X_pred)
     claim = [1 if i > 0.5 else 0 for i in claim_prob[:, 1]]
     submission = pd.DataFrame({"id": pred_index, "claim": claim})
-    submission.to_csv("./output/submission.csv", index=False)
+    submission.to_csv(OUTPUT_PATH, index=False)
 
     logging.info("Done!")
 
@@ -215,54 +269,9 @@ def main():
         **{
             "name": "Deep Residual Neural Network",
             "project": "tabularplaygroundseries-sep2021",
-            "observation_budget": 3,
+            "observation_budget": OBSERVATION_BUDGET,
             "metrics": [{"name": "cv_scores", "objective": "maximize"}],
-            "parameters": [
-                {"name": "n_layers", "type": "int", "bounds": {"min": 1, "max": 3}},
-                {
-                    "name": "n_hidden",
-                    "type": "int",
-                    "bounds": {"min": 8, "max": 32},
-                },
-                {"name": "dropout", "type": "double", "bounds": {"min": 0, "max": 0.6}},
-                {
-                    "name": "n_quantiles",
-                    "type": "int",
-                    "bounds": {"min": 32, "max": 1024},
-                },
-                {
-                    "name": "activation",
-                    "type": "categorical",
-                    "categorical_values": [
-                        {
-                            "enum_index": 1,
-                            "name": "relu",
-                            "object": "categorical_value",
-                        },
-                        {
-                            "enum_index": 2,
-                            "name": "swish",
-                            "object": "categorical_value",
-                        },
-                    ],
-                },
-                {
-                    "name": "quantile_output_distribution",
-                    "type": "categorical",
-                    "categorical_values": [
-                        {
-                            "enum_index": 1,
-                            "name": "uniform",
-                            "object": "categorical_value",
-                        },
-                        {
-                            "enum_index": 2,
-                            "name": "normal",
-                            "object": "categorical_value",
-                        },
-                    ],
-                },
-            ],
+            "parameters": PARAMETERS,
         }
     )
 
