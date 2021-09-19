@@ -1,5 +1,5 @@
 """
-Boosted trees classifier with 128 input features and 2 output classes with keras and sklearn
+Deep residual neural network with 128 input features and 2 output classes with keras and sklearn
 """
 import typing as t
 import numpy as np
