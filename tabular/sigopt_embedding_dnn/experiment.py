@@ -15,6 +15,7 @@ from sklearn.metrics import (
     recall_score,
     f1_score,
     roc_auc_score,
+    classification_report,
 )
 from sklearn.pipeline import Pipeline
 from tensorflow.keras.models import Model
@@ -23,6 +24,7 @@ from tensorflow.keras.metrics import AUC
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TerminateOnNaN
+from tensorflow.keras.backend import clear_session
 from sigopt import Connection as SigOpt
 import logging
 
@@ -55,6 +57,10 @@ def prepare_data():
 
 
 def create_pipeline(input_shape, assignments):
+    clear_session()
+
+    logging.info("Creating pipeline...")
+
     n_layers = assignments["n_layers"]
     n_hidden = assignments["n_hidden"]
     dropout = assignments["dropout"]
@@ -94,10 +100,16 @@ def create_pipeline(input_shape, assignments):
     estimator = KerasClassifier(
         build_fn=baseline_model,
         epochs=100,
-        batch_size=512,
+        batch_size=1024,
         callbacks=[
-            ReduceLROnPlateau(monitor="aucroc", factor=0.2, patience=3, min_lr=0.0001),
-            EarlyStopping(monitor="aucroc", patience=5, min_delta=0.0005),
+            ReduceLROnPlateau(
+                monitor="aucroc",
+                factor=0.5,
+                patience=2,
+                min_lr=0.00001,
+                min_delta=0.0005,
+            ),
+            EarlyStopping(monitor="aucroc", patience=3, min_delta=0.0002),
             TerminateOnNaN(),
         ],
         verbose=1,
@@ -126,7 +138,6 @@ def create_pipeline(input_shape, assignments):
 
 
 def evaluate_model(X_train, y_train, assignments):
-    logging.info("training model...")
     input_shape = t.cast(np.ndarray, X_train).shape[1]
 
     pipe = create_pipeline(input_shape, assignments)
@@ -140,7 +151,7 @@ def evaluate_model(X_train, y_train, assignments):
         cv=skfold,
         scoring="roc_auc",
         verbose=1,
-        n_jobs=1,
+        n_jobs=2,
     )
 
     logging.info(
@@ -177,10 +188,11 @@ def test_pipeline(X_train, y_train, X_test, y_test, assignments):
     confusion = confusion_matrix(y_test, y_pred)
     logging.info(f"confusion: {confusion}")
 
+    report = classification_report(y_test, y_pred)
+    logging.info(report)
+
 
 def make_predictions(X_train, y_train, pred_index, X_pred, assignments):
-    logging.info("Generating predictions...")
-
     input_shape = t.cast(np.ndarray, X_train).shape[1]
     pipe = create_pipeline(input_shape, assignments)
 
@@ -197,18 +209,20 @@ def make_predictions(X_train, y_train, pred_index, X_pred, assignments):
 def main():
     sigopt = SigOpt(client_token=os.environ.get("SIGOPT_API_TOKEN"))
 
+    logging.info("Creating experiment")
+
     experiment = sigopt.experiments().create(
         **{
             "name": "Deep Residual Neural Network",
             "project": "tabularplaygroundseries-sep2021",
-            "observation_budget": 10,
+            "observation_budget": 3,
             "metrics": [{"name": "cv_scores", "objective": "maximize"}],
             "parameters": [
-                {"name": "n_layers", "type": "int", "bounds": {"min": 1, "max": 6}},
+                {"name": "n_layers", "type": "int", "bounds": {"min": 1, "max": 3}},
                 {
                     "name": "n_hidden",
                     "type": "int",
-                    "bounds": {"min": 8, "max": 256},
+                    "bounds": {"min": 8, "max": 32},
                 },
                 {"name": "dropout", "type": "double", "bounds": {"min": 0, "max": 0.6}},
                 {
@@ -252,9 +266,13 @@ def main():
         }
     )
 
+    logging.info("Preparing dataset")
+
     train, test = prepare_data()
     X_train, y_train, X_test, y_test = train
     pred_index, X_pred = test
+
+    logging.info("Optimizing hyper-parameters")
 
     for _ in range(experiment.observation_budget):  # type: ignore
         # Receive a suggestion from SigOpt
@@ -275,6 +293,8 @@ def main():
                 failed=True, suggestion=suggestion.id  # type: ignore
             )
 
+    logging.info("Testing best model")
+
     # Get the best parameters
     assignments = (
         sigopt.experiments(experiment.id).best_assignments().fetch().data[0].assignments  # type: ignore
@@ -285,15 +305,17 @@ def main():
     # This is a SigOpt-tuned model
     test_pipeline(X_train, y_train, X_test, y_test, assignments)
 
+    logging.info("Producing predictions for target dataset")
+
     make_predictions(
-        np.concatenate(X_train, X_test),
-        np.concatenate(y_train, y_test),
+        pd.concat([X_train, X_test]),  # type: ignore
+        pd.concat([y_train, y_test]),  # type: ignore
         pred_index,
         X_pred,
         assignments,
     )
 
-    logging.info("Explore your experiment: https://app.sigopt.com/experiment/" + experiment.id + "/analysis")  # type: ignore
+    logging.info("Done! Explore your experiment: https://app.sigopt.com/experiment/" + experiment.id + "/analysis")  # type: ignore
 
 
 if __name__ == "__main__":
