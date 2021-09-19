@@ -30,17 +30,24 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
+SEED = 7  # fix random seed for reproducibility
+np.random.seed(SEED)  # type: ignore
+
+PIPELINE_NAME = "Deep Residual Neural Network"
+PROJECT = "tabularplaygroundseries-sep2021"
+
 TRAIN_INPUT_PATH = "../input/train.csv.zip"
 TEST_INPUT_PATH = "../input/test.csv.zip"
 OUTPUT_PATH = "./output/submission.csv"
 
-# fix random seed for reproducibility
-SEED = 7
-np.random.seed(SEED)  # type: ignore
-
 N_JOBS = 5
 N_SPLITS = 10
 OBSERVATION_BUDGET = 10
+
+METADATA = {
+    "description": "https://www.kaggle.com/c/tabular-playground-series-sep-2021",
+    "dataset": "https://www.kaggle.com/c/tabular-playground-series-sep-2021/data",
+}
 
 PARAMETERS = [
     {"name": "n_layers", "type": "int", "bounds": {"min": 4, "max": 8}},
@@ -267,11 +274,12 @@ def main():
 
     experiment = sigopt.experiments().create(
         **{
-            "name": "Deep Residual Neural Network",
-            "project": "tabularplaygroundseries-sep2021",
+            "name": PIPELINE_NAME,
+            "project": PROJECT,
             "observation_budget": OBSERVATION_BUDGET,
             "metrics": [{"name": "cv_scores", "objective": "maximize"}],
             "parameters": PARAMETERS,
+            "metadata": METADATA,
         }
     )
 
