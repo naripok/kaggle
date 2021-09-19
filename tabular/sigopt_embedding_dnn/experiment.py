@@ -7,7 +7,7 @@ import typing as t
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
-from sklearn.preprocessing import QuantileTransformer
+from sklearn.preprocessing import QuantileTransformer, KBinsDiscretizer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     confusion_matrix,
@@ -20,7 +20,15 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Input, Dropout, BatchNormalization, Add
+from tensorflow.keras.layers import (
+    Dense,
+    Input,
+    Dropout,
+    BatchNormalization,
+    Add,
+    Embedding,
+    Flatten,
+)
 from tensorflow.keras.metrics import AUC
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from tensorflow.keras.optimizers import Adam
@@ -37,16 +45,21 @@ random.seed(SEED)
 os.environ["PYTHONHASHSEED"] = str(SEED)
 np.random.seed(SEED)  # type: ignore
 
-PIPELINE_NAME = "Deep Residual Neural Network"
+PIPELINE_NAME = "Embedded Deep Residual Neural Network"
 PROJECT = "tabularplaygroundseries-sep2021"
 
 TRAIN_INPUT_PATH = "../input/train.csv.zip"
 TEST_INPUT_PATH = "../input/test.csv.zip"
 OUTPUT_PATH = "./output/submission.csv"
 
-N_JOBS = 5
+N_JOBS = 4
 N_SPLITS = 10
-OBSERVATION_BUDGET = 10
+OBSERVATION_BUDGET = 50
+REDUCE_LR_PATIENCE = 2
+MIN_LR = 0.000001
+REDUCE_LR_MIN_DELTA = 0.0001
+EARLY_STOPPING_PATIENCE = 4
+EARLY_STOPPING_MIN_DELTA = 0.00001
 
 METADATA = {
     "description": "https://www.kaggle.com/c/tabular-playground-series-sep-2021",
@@ -54,17 +67,27 @@ METADATA = {
 }
 
 PARAMETERS = [
-    {"name": "n_layers", "type": "int", "bounds": {"min": 4, "max": 8}},
+    {"name": "n_layers", "type": "int", "bounds": {"min": 1, "max": 8}},
     {
         "name": "n_hidden",
         "type": "int",
-        "bounds": {"min": 8, "max": 128},
+        "bounds": {"min": 16, "max": 256},
     },
-    {"name": "dropout", "type": "double", "bounds": {"min": 0, "max": 0.6}},
+    {"name": "dropout", "type": "double", "bounds": {"min": 0.01, "max": 0.5}},
     {
         "name": "n_quantiles",
         "type": "int",
-        "bounds": {"min": 32, "max": 2048},
+        "bounds": {"min": 128, "max": 2048},
+    },
+    {
+        "name": "n_bins",
+        "type": "int",
+        "bounds": {"min": 64, "max": 512},
+    },
+    {
+        "name": "embedding_output_dim",
+        "type": "int",
+        "bounds": {"min": 4, "max": 64},
     },
     {
         "name": "activation",
@@ -132,21 +155,33 @@ def create_pipeline(input_shape, assignments):
     activation = assignments["activation"]
     n_quantiles = assignments["n_quantiles"]
     quantile_output_distribution = assignments["quantile_output_distribution"]
+    n_bins = assignments["n_bins"]
+    embedding_output_dim = assignments["embedding_output_dim"]
 
     def baseline_model():
-        input = Input((input_shape,))
-        proj = Dropout(dropout)(
-            BatchNormalization()(Dense(n_hidden, activation=activation)(input))
-        )
-        hidden = Dropout(dropout)(
-            BatchNormalization()(Dense(n_hidden, activation=activation)(proj))
-        )
-        hidden = Add()([proj, hidden])
-        for _ in range(n_layers):
-            hidden = Dropout(dropout)(
-                BatchNormalization()(Dense(n_hidden, activation=activation)(hidden))
-            )
+        def make_proj(input):
+            proj = Embedding(
+                input_dim=n_bins,
+                output_dim=embedding_output_dim,
+                embeddings_initializer="glorot_uniform",
+            )(input)
+            proj = Flatten()(proj)
+            proj = Dense(n_hidden, activation=activation)(proj)
+            proj = Dropout(dropout)(proj)
+            return proj
+
+        def make_hidden(input):
+            hidden = Dense(n_hidden, activation=activation)(input)
+            hidden = Dropout(dropout)(hidden)
             hidden = Add()([proj, hidden])
+            hidden = BatchNormalization()(hidden)
+            return hidden
+
+        input = Input((input_shape,))
+        proj = make_proj(input)
+        hidden = make_hidden(proj)
+        for _ in range(n_layers):
+            hidden = make_hidden(hidden)
 
         output = Dense(2, activation="softmax")(hidden)
 
@@ -155,7 +190,7 @@ def create_pipeline(input_shape, assignments):
         model.compile(
             optimizer=Adam(learning_rate=0.1),
             loss="categorical_crossentropy",
-            metrics=["accuracy", AUC(name="aucroc")],
+            metrics=[AUC(name="aucroc")],
         )
 
         return model
@@ -169,12 +204,17 @@ def create_pipeline(input_shape, assignments):
         callbacks=[
             ReduceLROnPlateau(
                 monitor="aucroc",
-                factor=0.5,
-                patience=2,
-                min_lr=0.00001,
-                min_delta=0.0005,
+                factor=0.2,
+                patience=REDUCE_LR_PATIENCE,
+                min_lr=MIN_LR,
+                min_delta=REDUCE_LR_MIN_DELTA,
             ),
-            EarlyStopping(monitor="aucroc", patience=4, min_delta=0.0002),
+            EarlyStopping(
+                monitor="aucroc",
+                patience=EARLY_STOPPING_PATIENCE,
+                min_delta=EARLY_STOPPING_MIN_DELTA,
+                restore_best_weights=True,
+            ),
             TerminateOnNaN(),
         ],
         verbose=1,
@@ -194,6 +234,10 @@ def create_pipeline(input_shape, assignments):
                     n_quantiles=n_quantiles,
                     output_distribution=quantile_output_distribution,
                 ),
+            ),
+            (
+                "binning",
+                KBinsDiscretizer(n_bins=n_bins, encode="ordinal", strategy="uniform"),
             ),
             ("model", estimator),
         ]
@@ -235,26 +279,21 @@ def test_pipeline(X_train, y_train, X_test, y_test, assignments):
     y_prob = pipe.predict_proba(X_test)
     y_pred = [1 if i > 0.5 else 0 for i in y_prob[:, 1]]
 
-    roc = roc_auc_score(y_test, y_pred)
-    logging.info(f"roc: {roc}")
-
-    accuracy = accuracy_score(y_test, y_pred)
-    logging.info(f"accuracy: {accuracy}")
-
-    precision = precision_score(y_test, y_pred)
-    logging.info(f"precision: {precision}")
-
-    recall = recall_score(y_test, y_pred)
-    logging.info(f"recall: {recall}")
-
-    f1 = f1_score(y_test, y_pred)
-    logging.info(f"f1: {f1}")
+    results = {
+        "roc": roc_auc_score(y_test, y_pred),
+        "accuracy": accuracy_score(y_test, y_pred),
+        "precision": precision_score(y_test, y_pred),
+        "recall": recall_score(y_test, y_pred),
+        "f1": f1_score(y_test, y_pred),
+    }
 
     confusion = confusion_matrix(y_test, y_pred)
     logging.info(f"confusion: {confusion}")
 
     report = classification_report(y_test, y_pred)
     logging.info(report)
+
+    return results
 
 
 def make_predictions(X_train, y_train, pred_index, X_pred, assignments):
@@ -324,7 +363,9 @@ def main():
     logging.info(assignments)
 
     # This is a SigOpt-tuned model
-    test_pipeline(X_train, y_train, X_test, y_test, assignments)
+    test_results = test_pipeline(X_train, y_train, X_test, y_test, assignments)
+
+    sigopt.experiments(experiment.id).update(metadata={**METADATA, **test_results})  # type: ignore
 
     logging.info("Producing predictions for target dataset")
 
