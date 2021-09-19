@@ -208,6 +208,7 @@ def create_pipeline(input_shape, assignments):
                 patience=REDUCE_LR_PATIENCE,
                 min_lr=MIN_LR,
                 min_delta=REDUCE_LR_MIN_DELTA,
+                mode="max",
             ),
             EarlyStopping(
                 monitor="aucroc",
