@@ -52,7 +52,7 @@ TRAIN_INPUT_PATH = "../input/train.csv.zip"
 TEST_INPUT_PATH = "../input/test.csv.zip"
 OUTPUT_PATH = "./output/submission.csv"
 
-N_JOBS = 4
+N_JOBS = 2
 N_SPLITS = 10
 OBSERVATION_BUDGET = 50
 REDUCE_LR_PATIENCE = 2
