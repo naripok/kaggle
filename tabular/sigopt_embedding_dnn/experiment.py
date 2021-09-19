@@ -59,7 +59,7 @@ REDUCE_LR_PATIENCE = 2
 MIN_LR = 0.000001
 REDUCE_LR_MIN_DELTA = 0.0001
 EARLY_STOPPING_PATIENCE = 4
-EARLY_STOPPING_MIN_DELTA = 0.00001
+EARLY_STOPPING_MIN_DELTA = 0.0001
 
 METADATA = {
     "description": "https://www.kaggle.com/c/tabular-playground-series-sep-2021",
@@ -213,6 +213,7 @@ def create_pipeline(input_shape, assignments):
                 monitor="aucroc",
                 patience=EARLY_STOPPING_PATIENCE,
                 min_delta=EARLY_STOPPING_MIN_DELTA,
+                mode="max",
                 restore_best_weights=True,
             ),
             TerminateOnNaN(),
