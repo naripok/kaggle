@@ -2,6 +2,7 @@
 Embedding DRNN classifier with 128 input features and 2 output classes with keras and sklearn
 """
 import os
+import random
 import typing as t
 import numpy as np
 import pandas as pd
@@ -30,7 +31,10 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-SEED = 7  # fix random seed for reproducibility
+# fix random seed for reproducibility
+SEED = 33
+random.seed(SEED)
+os.environ["PYTHONHASHSEED"] = str(SEED)
 np.random.seed(SEED)  # type: ignore
 
 PIPELINE_NAME = "Deep Residual Neural Network"
