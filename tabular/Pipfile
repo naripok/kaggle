@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+xgboost = "*"
+sklearn = "*"
+pandas = "*"
+numpy = "*"
+tensorflow = "*"
+sigopt = "*"
+kaggle = "*"
+
+[dev-packages]
+jupyterlab = "*"
+
+[requires]
+python_version = "3.9"
