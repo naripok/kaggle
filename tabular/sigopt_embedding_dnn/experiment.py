@@ -55,9 +55,9 @@ TRAIN_INPUT_PATH = "../input/train.csv.zip"
 TEST_INPUT_PATH = "../input/test.csv.zip"
 OUTPUT_PATH = "./output/submission.csv"
 
-N_JOBS = 1
+N_CV_JOBS = 2
 N_CV_SPLITS = 5
-OBSERVATION_BUDGET = 20
+OBSERVATION_BUDGET = 50
 REDUCE_LR_PATIENCE = 2
 REDUCE_LR_MIN_DELTA = 0.001
 MAX_LR = 0.1
@@ -73,12 +73,12 @@ PARAMETERS = [
     {
         "name": "early_stop_patience",
         "type": "int",
-        "bounds": {"min": 1, "max": 6},
+        "bounds": {"min": 3, "max": 6},
     },
     {
         "name": "early_stop_min_delta",
         "type": "double",
-        "bounds": {"min": 0.0001, "max": 0.01},
+        "bounds": {"min": 0.0001, "max": 0.005},
     },
     {"name": "n_k_best_params", "type": "int", "bounds": {"min": 2, "max": 118}},
     {"name": "n_layers", "type": "int", "bounds": {"min": 0, "max": 8}},
@@ -282,7 +282,7 @@ def evaluate_model(X_train, y_train, assignments):
         cv=skfold,
         scoring="roc_auc",
         verbose=1,
-        n_jobs=N_JOBS,
+        n_jobs=N_CV_JOBS,
     )
 
     logging.info(
