@@ -78,7 +78,7 @@ PARAMETERS = [
     {
         "name": "early_stop_min_delta",
         "type": "double",
-        "bounds": {"min": 0.001, "max": 0.1},
+        "bounds": {"min": 0.0001, "max": 0.01},
     },
     {"name": "n_k_best_params", "type": "int", "bounds": {"min": 2, "max": 118}},
     {"name": "n_layers", "type": "int", "bounds": {"min": 0, "max": 8}},
