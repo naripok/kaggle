@@ -6,6 +6,7 @@ import random
 import typing as t
 import numpy as np
 import pandas as pd
+from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
 from sklearn.preprocessing import QuantileTransformer, KBinsDiscretizer
 from sklearn.impute import SimpleImputer
@@ -45,6 +46,8 @@ random.seed(SEED)
 os.environ["PYTHONHASHSEED"] = str(SEED)
 np.random.seed(SEED)  # type: ignore
 
+SIGOPT_API_TOKEN = os.environ.get("SIGOPT_API_TOKEN")
+
 PIPELINE_NAME = "Embedded Deep Residual Neural Network"
 PROJECT = "tabularplaygroundseries-sep2021"
 
@@ -52,14 +55,14 @@ TRAIN_INPUT_PATH = "../input/train.csv.zip"
 TEST_INPUT_PATH = "../input/test.csv.zip"
 OUTPUT_PATH = "./output/submission.csv"
 
-N_JOBS = 2
-N_SPLITS = 10
-OBSERVATION_BUDGET = 50
+N_JOBS = 1
+N_CV_SPLITS = 5
+OBSERVATION_BUDGET = 20
 REDUCE_LR_PATIENCE = 2
-MIN_LR = 0.000001
-REDUCE_LR_MIN_DELTA = 0.0001
-EARLY_STOPPING_PATIENCE = 4
-EARLY_STOPPING_MIN_DELTA = 0.0001
+REDUCE_LR_MIN_DELTA = 0.005
+MAX_LR = 0.1
+MIN_LR = 0.00001
+MAX_TRAIN_EPOCHS = 25
 
 METADATA = {
     "description": "https://www.kaggle.com/c/tabular-playground-series-sep-2021",
@@ -67,22 +70,33 @@ METADATA = {
 }
 
 PARAMETERS = [
-    {"name": "n_layers", "type": "int", "bounds": {"min": 1, "max": 8}},
+    {
+        "name": "early_stop_patience",
+        "type": "int",
+        "bounds": {"min": 1, "max": 6},
+    },
+    {
+        "name": "early_stop_min_delta",
+        "type": "double",
+        "bounds": {"min": 0.001, "max": 0.1},
+    },
+    {"name": "n_k_best_params", "type": "int", "bounds": {"min": 2, "max": 118}},
+    {"name": "n_layers", "type": "int", "bounds": {"min": 0, "max": 8}},
     {
         "name": "n_hidden",
         "type": "int",
-        "bounds": {"min": 16, "max": 256},
+        "bounds": {"min": 16, "max": 128},
     },
     {"name": "dropout", "type": "double", "bounds": {"min": 0.01, "max": 0.5}},
     {
         "name": "n_quantiles",
         "type": "int",
-        "bounds": {"min": 128, "max": 2048},
+        "bounds": {"min": 64, "max": 2048},
     },
     {
         "name": "n_bins",
         "type": "int",
-        "bounds": {"min": 64, "max": 512},
+        "bounds": {"min": 32, "max": 512},
     },
     {
         "name": "embedding_output_dim",
@@ -138,16 +152,17 @@ def prepare_data():
 
     logging.info("split, split, split...")
     X_train, X_test, y_train, y_test = train_test_split(
-        train[features], train["claim"], test_size=0.33, random_state=SEED
+        train[features], train["claim"], test_size=0.1, random_state=SEED
     )
 
     return (X_train, y_train, X_test, y_test), (test["id"], test[features])
 
 
-def create_pipeline(input_shape, assignments):
+def create_pipeline(assignments):
     clear_session()
 
     logging.info("Creating pipeline...")
+    logging.info(assignments)
 
     n_layers = assignments["n_layers"]
     n_hidden = assignments["n_hidden"]
@@ -157,6 +172,9 @@ def create_pipeline(input_shape, assignments):
     quantile_output_distribution = assignments["quantile_output_distribution"]
     n_bins = assignments["n_bins"]
     embedding_output_dim = assignments["embedding_output_dim"]
+    early_stop_patience = assignments["early_stop_patience"]
+    early_stop_min_delta = assignments["early_stop_min_delta"]
+    n_k_best_params = assignments["n_k_best_params"]
 
     def baseline_model():
         def make_proj(input):
@@ -177,7 +195,7 @@ def create_pipeline(input_shape, assignments):
             hidden = BatchNormalization()(hidden)
             return hidden
 
-        input = Input((input_shape,))
+        input = Input((n_k_best_params,))
         proj = make_proj(input)
         hidden = make_hidden(proj)
         for _ in range(n_layers):
@@ -188,7 +206,7 @@ def create_pipeline(input_shape, assignments):
         model = Model(input, output)
 
         model.compile(
-            optimizer=Adam(learning_rate=0.1),
+            optimizer=Adam(learning_rate=MAX_LR),
             loss="categorical_crossentropy",
             metrics=[AUC(name="aucroc")],
         )
@@ -199,7 +217,7 @@ def create_pipeline(input_shape, assignments):
 
     estimator = KerasClassifier(
         build_fn=baseline_model,
-        epochs=100,
+        epochs=MAX_TRAIN_EPOCHS,
         batch_size=1024,
         callbacks=[
             ReduceLROnPlateau(
@@ -212,8 +230,8 @@ def create_pipeline(input_shape, assignments):
             ),
             EarlyStopping(
                 monitor="aucroc",
-                patience=EARLY_STOPPING_PATIENCE,
-                min_delta=EARLY_STOPPING_MIN_DELTA,
+                patience=early_stop_patience,
+                min_delta=early_stop_min_delta,
                 mode="max",
                 restore_best_weights=True,
             ),
@@ -238,6 +256,10 @@ def create_pipeline(input_shape, assignments):
                 ),
             ),
             (
+                "feature_selection",
+                SelectKBest(f_classif, k=n_k_best_params),
+            ),
+            (
                 "binning",
                 KBinsDiscretizer(n_bins=n_bins, encode="ordinal", strategy="uniform"),
             ),
@@ -249,11 +271,9 @@ def create_pipeline(input_shape, assignments):
 
 
 def evaluate_model(X_train, y_train, assignments):
-    input_shape = t.cast(np.ndarray, X_train).shape[1]
+    pipe = create_pipeline(assignments)
 
-    pipe = create_pipeline(input_shape, assignments)
-
-    skfold = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=SEED)
+    skfold = StratifiedKFold(n_splits=N_CV_SPLITS, shuffle=True, random_state=SEED)
 
     results = cross_val_score(
         pipe,
@@ -273,8 +293,7 @@ def evaluate_model(X_train, y_train, assignments):
 
 
 def test_pipeline(X_train, y_train, X_test, y_test, assignments):
-    input_shape = t.cast(np.ndarray, X_train).shape[1]
-    pipe = create_pipeline(input_shape, assignments)
+    pipe = create_pipeline(assignments)
 
     pipe.fit(X_train, y_train)
 
@@ -299,8 +318,7 @@ def test_pipeline(X_train, y_train, X_test, y_test, assignments):
 
 
 def make_predictions(X_train, y_train, pred_index, X_pred, assignments):
-    input_shape = t.cast(np.ndarray, X_train).shape[1]
-    pipe = create_pipeline(input_shape, assignments)
+    pipe = create_pipeline(assignments)
 
     pipe.fit(X_train, y_train)
 
@@ -313,7 +331,7 @@ def make_predictions(X_train, y_train, pred_index, X_pred, assignments):
 
 
 def main():
-    sigopt = SigOpt(client_token=os.environ.get("SIGOPT_API_TOKEN"))
+    sigopt = SigOpt(client_token=SIGOPT_API_TOKEN)
 
     logging.info("Creating experiment")
 
