@@ -59,10 +59,11 @@ N_CV_JOBS = 2
 N_CV_SPLITS = 5
 OBSERVATION_BUDGET = 50
 REDUCE_LR_PATIENCE = 2
-REDUCE_LR_MIN_DELTA = 0.001
+REDUCE_LR_MIN_DELTA = 0.005
+REDUCE_LR_FACTOR = 0.5
 MAX_LR = 0.1
-MIN_LR = 0.00001
-MAX_TRAIN_EPOCHS = 25
+MIN_LR = 0.0000001
+MAX_TRAIN_EPOCHS = 30
 
 METADATA = {
     "description": "https://www.kaggle.com/c/tabular-playground-series-sep-2021",
@@ -78,16 +79,16 @@ PARAMETERS = [
     {
         "name": "early_stop_min_delta",
         "type": "double",
-        "bounds": {"min": 0.0001, "max": 0.005},
+        "bounds": {"min": 0.0001, "max": 0.01},
     },
     {"name": "n_k_best_params", "type": "int", "bounds": {"min": 2, "max": 118}},
     {"name": "n_layers", "type": "int", "bounds": {"min": 0, "max": 8}},
     {
         "name": "n_hidden",
         "type": "int",
-        "bounds": {"min": 16, "max": 128},
+        "bounds": {"min": 32, "max": 128},
     },
-    {"name": "dropout", "type": "double", "bounds": {"min": 0.01, "max": 0.5}},
+    {"name": "dropout", "type": "double", "bounds": {"min": 0.1, "max": 0.5}},
     {
         "name": "n_quantiles",
         "type": "int",
@@ -101,7 +102,7 @@ PARAMETERS = [
     {
         "name": "embedding_output_dim",
         "type": "int",
-        "bounds": {"min": 4, "max": 64},
+        "bounds": {"min": 3, "max": 128},
     },
     {
         "name": "activation",
@@ -222,7 +223,7 @@ def create_pipeline(assignments):
         callbacks=[
             ReduceLROnPlateau(
                 monitor="aucroc",
-                factor=0.2,
+                factor=REDUCE_LR_FACTOR,
                 patience=REDUCE_LR_PATIENCE,
                 min_lr=MIN_LR,
                 min_delta=REDUCE_LR_MIN_DELTA,
