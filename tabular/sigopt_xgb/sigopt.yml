@@ -1,10 +1,15 @@
 experiment:
   name: XGBoost Optimization
   metrics:
-    - name: roc
+    - name: cv_score
       strategy: optimize
       objective: maximize
   parameters:
+    - name: n_quantiles
+      bounds:
+        min: 32
+        max: 1024
+      type: int
     - name: n_estimators
       bounds:
         min: 10
@@ -12,23 +17,31 @@ experiment:
       type: int
     - name: reg_lambda
       bounds:
-        min: 0
+        min: 0.00001
         max: 10
-      type: int
-    - name: max_depth
+      type: double
+      transformation: log
+    - name: reg_alpha
       bounds:
-        min: 1
-        max: 15
-      type: int
+        min: 0.00001
+        max: 10
+      type: double
+      transformation: log
     - name: learning_rate
       bounds:
-        min: 0.001
-        max: 0.1
+        min: 0.000001
+        max: 1
       type: double
+      transformation: log
+    - name: max_depth
+      bounds:
+        min: 2
+        max: 15
+      type: int
     - name: gamma
       bounds:
         min: 0
-        max: 15
+        max: 5
       type: double
     - name: colsample_bytree
       bounds:
@@ -37,17 +50,12 @@ experiment:
       type: double
     - name: subsample
       bounds:
-        min: 0.4
+        min: 0.5
         max: 1
       type: double
-    - name: reg_alpha
-      bounds:
-        min: 0
-        max: 100
-      type: int
     - name: min_child_weight
       bounds:
-        min: 0
-        max: 100
+        min: 2
+        max: 15
       type: int
-  observation_budget: 20
+  observation_budget: 50

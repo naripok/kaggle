@@ -1,6 +1,8 @@
 """
 Boosted trees classifier with 128 input features and 2 output classes with keras and sklearn
 """
+import os
+import random
 import typing as t
 import numpy as np
 import pandas as pd
@@ -8,7 +10,6 @@ from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test
 from sklearn.preprocessing import QuantileTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
-    confusion_matrix,
     accuracy_score,
     precision_score,
     recall_score,
@@ -22,8 +23,10 @@ import sigopt
 sigopt.log_model("XGBClassifier")
 
 # fix random seed for reproducibility
-seed = 7
-np.random.seed(seed)
+SEED = 33
+random.seed(SEED)
+os.environ["PYTHONHASHSEED"] = str(SEED)
+np.random.seed(SEED)  # type: ignore
 
 print("loading dataset")
 train = t.cast(pd.DataFrame, pd.read_csv("../input/train.csv.zip"))
@@ -38,7 +41,7 @@ features = [col for col in train.columns if col not in ["claim", "id"]]
 
 print("split, split, split...")
 X_train, X_test, y_train, y_test = train_test_split(
-    train[features], train["claim"], test_size=0.33, random_state=42
+    train[features], train["claim"], test_size=0.1, random_state=42
 )
 
 print("training model...")
@@ -50,35 +53,41 @@ pipe = Pipeline(
             "imputer",
             SimpleImputer(strategy="constant", missing_values=np.nan, fill_value=-999),
         ),
-        ("scaler", QuantileTransformer(n_quantiles=64, output_distribution="uniform")),
+        (
+            "scaler",
+            QuantileTransformer(
+                n_quantiles=sigopt.get_parameter("n_quantiles", 128),
+                output_distribution="uniform",
+            ),
+        ),
         (
             "model",
             xgb.XGBClassifier(
                 **{
                     "n_estimators": sigopt.get_parameter("n_estimators", default=200),
-                    "reg_lambda": sigopt.get_parameter("reg_lambda", default=3),
-                    "reg_alpha": sigopt.get_parameter("reg_alpha", default=26),
-                    "subsample": sigopt.get_parameter("subsample", default=0.6),
+                    "reg_lambda": sigopt.get_parameter("reg_lambda", default=1),
+                    "reg_alpha": sigopt.get_parameter("reg_alpha", default=1),
+                    "subsample": sigopt.get_parameter("subsample", default=1),
                     "colsample_bytree": sigopt.get_parameter(
                         "colsample_bytree", default=0.6
                     ),
-                    "max_depth": sigopt.get_parameter("max_depth", default=9),
+                    "max_depth": sigopt.get_parameter("max_depth", default=3),
                     "min_child_weight": sigopt.get_parameter(
                         "min_child_weight", default=5
                     ),
-                    "gamma": sigopt.get_parameter("gamma", default=13.054739572819486),
+                    "gamma": sigopt.get_parameter("gamma", default=1),
                     "learning_rate": sigopt.get_parameter(
-                        "learning_rate", default=0.01
+                        "learning_rate", default=0.0001
                     ),
                     "tree_method": "hist",
-                    "booster": "gbtree"
+                    "booster": "gbtree",
                 }
             ),
         ),
     ]
 )
 
-skfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+skfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
 
 results = cross_val_score(
     pipe,
@@ -91,6 +100,7 @@ results = cross_val_score(
 )
 
 print("Baseline: %.2f%% %.2f%%)" % (results.mean() * 100, results.std() * 100))
+sigopt.log_metric("cv_score", results.mean(), stddev=results.std())
 
 pipe.fit(X_train, y_train)
 
@@ -117,12 +127,12 @@ f1 = f1_score(y_test, y_pred)
 print(f"f1: {f1}")
 sigopt.log_metric("f1", f1)
 
-confusion = confusion_matrix(y_test, y_pred)
-print(f"confusion: {confusion}")
+# confusion = confusion_matrix(y_test, y_pred)
+# print(f"confusion: {confusion}")
 # sigopt.log_metric("confusion", confusion)
 
 # print("Generating predictions...")
-# 
+#
 # claim_prob = pipe.predict_proba(test[features])
 # claim = [1 if i > 0.5 else 0 for i in claim_prob[:, 1]]
 # submission = pd.DataFrame({"id": test["id"], "claim": claim})
