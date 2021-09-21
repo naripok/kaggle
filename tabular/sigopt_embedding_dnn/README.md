@@ -1,3 +1,11 @@
+# Environment setup
+
+Install dependencies with pipenv
+
+```bash
+pipenv install --dev
+```
+
 # Training
 
 - Add your sigopt token to `env.sh` following `env.sh.example`.
