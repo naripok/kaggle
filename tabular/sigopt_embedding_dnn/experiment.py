@@ -55,15 +55,15 @@ TRAIN_INPUT_PATH = "../input/train.csv.zip"
 TEST_INPUT_PATH = "../input/test.csv.zip"
 OUTPUT_PATH = "./output/submission.csv"
 
-N_CV_JOBS = 2
+N_CV_JOBS = 3
 N_CV_SPLITS = 5
-OBSERVATION_BUDGET = 50
+OBSERVATION_BUDGET = 100
 REDUCE_LR_PATIENCE = 2
 REDUCE_LR_MIN_DELTA = 0.005
 REDUCE_LR_FACTOR = 0.5
 MAX_LR = 0.1
 MIN_LR = 0.0000001
-MAX_TRAIN_EPOCHS = 30
+MAX_TRAIN_EPOCHS = 20
 
 METADATA = {
     "description": "https://www.kaggle.com/c/tabular-playground-series-sep-2021",
@@ -74,35 +74,36 @@ PARAMETERS = [
     {
         "name": "early_stop_patience",
         "type": "int",
-        "bounds": {"min": 3, "max": 6},
+        "bounds": {"min": 3, "max": 5},
     },
     {
         "name": "early_stop_min_delta",
         "type": "double",
         "bounds": {"min": 0.0001, "max": 0.01},
+        "transformation": "log",
     },
     {"name": "n_k_best_params", "type": "int", "bounds": {"min": 2, "max": 118}},
-    {"name": "n_layers", "type": "int", "bounds": {"min": 0, "max": 8}},
+    {"name": "n_layers", "type": "int", "bounds": {"min": 0, "max": 6}},
     {
         "name": "n_hidden",
         "type": "int",
-        "bounds": {"min": 32, "max": 128},
+        "bounds": {"min": 8, "max": 64},
     },
     {"name": "dropout", "type": "double", "bounds": {"min": 0.1, "max": 0.5}},
     {
         "name": "n_quantiles",
         "type": "int",
-        "bounds": {"min": 64, "max": 2048},
+        "bounds": {"min": 16, "max": 512},
     },
     {
         "name": "n_bins",
         "type": "int",
-        "bounds": {"min": 32, "max": 512},
+        "bounds": {"min": 8, "max": 256},
     },
     {
         "name": "embedding_output_dim",
         "type": "int",
-        "bounds": {"min": 3, "max": 128},
+        "bounds": {"min": 3, "max": 32},
     },
     {
         "name": "activation",
@@ -271,7 +272,7 @@ def create_pipeline(assignments):
     return pipe
 
 
-def evaluate_model(X_train, y_train, assignments):
+def evaluate_pipeline(X_train, y_train, assignments):
     pipe = create_pipeline(assignments)
 
     skfold = StratifiedKFold(n_splits=N_CV_SPLITS, shuffle=True, random_state=SEED)
@@ -290,7 +291,7 @@ def evaluate_model(X_train, y_train, assignments):
         "Baseline: %.2f%% %.2f%%)" % (results.mean() * 100, results.std() * 100)
     )
 
-    return results.mean()
+    return results.mean(), results.std()
 
 
 def test_pipeline(X_train, y_train, X_test, y_test, assignments):
@@ -331,7 +332,7 @@ def make_predictions(X_train, y_train, pred_index, X_pred, assignments):
     logging.info("Done!")
 
 
-def main():
+def run_experiment():
     sigopt = SigOpt(client_token=SIGOPT_API_TOKEN)
 
     logging.info("Creating experiment")
@@ -362,12 +363,17 @@ def main():
 
         # Evaluate the model using suggestion
         try:
-            value = evaluate_model(train[0], train[1], assignments)
+            value, value_stddev = evaluate_pipeline(train[0], train[1], assignments)
 
             # Update the experiment
             sigopt.experiments(experiment.id).observations().create(  # type: ignore
-                suggestion=suggestion.id, value=value  # type: ignore
+                suggestion=suggestion.id,  # type: ignore
+                value=value,  # type: ignore
+                value_stddev=value_stddev,  # type: ignore
             )
+
+            # update the experiment object, required?
+            experiment = sigopt.experiments(experiment.id).fetch()  # type: ignore
         except Exception as e:
             logging.exception(e)
             sigopt.experiments(experiment.id).observations().create(  # type: ignore
@@ -402,4 +408,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_experiment()
