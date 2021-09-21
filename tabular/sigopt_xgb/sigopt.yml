@@ -9,14 +9,14 @@ experiment:
   parameters:
     - name: n_quantiles
       bounds:
-        min: 32
+        min: 16
         max: 1024
       type: int
 
     - name: n_estimators
       bounds:
         min: 10
-        max: 4000
+        max: 1000
       type: int
 
     - name: reg_lambda
@@ -43,7 +43,7 @@ experiment:
     - name: max_depth
       bounds:
         min: 2
-        max: 15
+        max: 6
       type: int
 
     - name: gamma
@@ -67,7 +67,7 @@ experiment:
     - name: min_child_weight
       bounds:
         min: 2
-        max: 15
+        max: 9
       type: int
 
   observation_budget: 50
