@@ -1,6 +1,8 @@
 # Training
 
-This will optimize pipeline for input dataset
+- Add your sigopt token to `env.sh` following `env.sh.example`.
+
+- Run the following to optimize the pipeline for the input dataset
 
 ```bash
 $ ./run.sh
