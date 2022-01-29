@@ -1,6 +1,0 @@
-.venv
-input
-.ipynb_checkpoints
-__pycache__
-output
-env.sh
