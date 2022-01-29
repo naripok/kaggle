@@ -5,7 +5,7 @@ build:
 	docker build -t python-env .
 
 fetch-data:
-	docker run --rm -v ${PWD}:/home/jovyan/work python-env ./fetch-data.sh
+	docker run --rm -v ${PWD}:/home/jovyan/work python-env ./scripts/fetch-data.sh
 
 interact:
 	docker run --rm -it -v ${PWD}:/home/jovyan/work python-env /bin/bash
