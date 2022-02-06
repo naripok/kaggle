@@ -14,8 +14,6 @@ See [documentation](https://github.com/Kaggle/kaggle-api#api-credentials) for th
 ## Running
 
 ```bash
-make build
-make fetch-data
 make dev
 ```
 

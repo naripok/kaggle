@@ -2,5 +2,10 @@ data
 .venv
 __pycache__
 .ipynb_checkpoints
-kaggle.json
+.kaggle
 input/
+.wandb
+notebooks/longformer-base-4096-finetuned-ner/
+notebooks/wandb/
+notebooks/kaggle_secrets/
+notebooks/utils/
