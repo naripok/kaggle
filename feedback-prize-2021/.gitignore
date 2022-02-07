@@ -5,6 +5,7 @@ __pycache__
 .kaggle
 input/
 .wandb
+output/
 notebooks/longformer-*
 notebooks/wandb/
 notebooks/kaggle_secrets/
