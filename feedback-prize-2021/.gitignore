@@ -5,7 +5,7 @@ __pycache__
 .kaggle
 input/
 .wandb
-notebooks/longformer-base-4096-finetuned-ner/
+notebooks/longformer-*
 notebooks/wandb/
 notebooks/kaggle_secrets/
 notebooks/utils/
