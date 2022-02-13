@@ -1,8 +1,7 @@
 FROM jupyter/tensorflow-notebook
 
 WORKDIR /home/jovyan/work
-
-COPY ./ ./
+COPY ./requirements.txt ./
 
 RUN pip install -r requirements.txt
 

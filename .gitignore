@@ -1,0 +1,17 @@
+.venv
+__pycache__
+.ipynb_checkpoints
+
+.kaggle
+.wandb
+
+input/
+output/
+
+src/notebooks/*
+!src/notebooks/feedback-prize-huggingface-baseline-training.ipynb
+!src/notebooks/feedback-prize-huggingface-baseline-inference.ipynb
+
+!src/notebooks/longformer-base-4096/
+src/notebooks/longformer-base-4096/*
+!src/notebooks/longformer-base-4096/dataset-metadata.json
